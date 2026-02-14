@@ -1,0 +1,45 @@
+
+services:
+
+  cerula-dev:
+    image: python:3.13-bookworm
+    container_name: cerula-dev
+    hostname: cerula-dev
+    stdin_open: true
+    tty: true
+    command: ["/bin/bash", "/home/entrypoint.sh"]
+    build:
+      context: ./dev
+      dockerfile: ./Dockerfile
+    ports:
+      - 8083:8083
+    volumes:
+     - ./dev:/home
+     - cerula-dev-vol:/var/lib/cerula-dev_volume
+
+  cerula-ui:
+    image: node:22-bookworm
+    container_name: cerula-ui
+    hostname: cerula-ui
+    stdin_open: true
+    tty: true
+    environment:
+      - VITE_BACKEND_URL=http://cerula-dev:8083
+    depends_on:
+      - cerula-dev
+    command: ["/bin/bash", "/home/entrypoint.sh"]
+    build:
+      context: ./ui
+      dockerfile: ./Dockerfile
+    ports:
+      - 5173:5173
+    volumes:
+     - ./ui:/home
+     - cerula-ui-vol:/var/lib/cerula-ui_volume
+
+volumes:
+  cerula-dev-vol:
+    name: cerula-dev-volume
+  cerula-ui-vol:
+    name: cerula-ui-volume
+    
