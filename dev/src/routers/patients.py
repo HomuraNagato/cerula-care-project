@@ -3,9 +3,9 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..core.db import get_session
 from ..models import CareAssignment, CareTeamMember, HealthScreening, Patient, PatientStatus
@@ -52,11 +52,12 @@ def list_patients(
     if program:
         query = query.where(Patient.program.ilike(f"%{program}%"))
 
-    total = session.exec(select(func.count()).select_from(query.subquery())).scalar_one()
+    total_row = session.exec(select(func.count()).select_from(query.subquery())).one()
+    total = total_row[0] if isinstance(total_row, tuple) else total_row
     offset = (page - 1) * limit
-    patients = (
-        session.exec(query.order_by(Patient.created_at.desc()).offset(offset).limit(limit)).scalars().all()
-    )
+    patients = session.exec(
+        query.order_by(Patient.created_at.desc()).offset(offset).limit(limit)
+    ).all()
 
     patient_ids = [patient.id for patient in patients]
     latest_screenings = {}
@@ -65,7 +66,7 @@ def list_patients(
             select(HealthScreening)
             .where(HealthScreening.patient_id.in_(patient_ids))
             .order_by(HealthScreening.patient_id, HealthScreening.collected_on.desc())
-        ).scalars().all()
+        ).all()
         for screening in screening_rows:
             if screening.patient_id not in latest_screenings:
                 latest_screenings[screening.patient_id] = screening
@@ -115,7 +116,7 @@ def get_patient_detail(patient_id: UUID, session: Session = Depends(get_session)
             selectinload(Patient.screenings),
         )
     )
-    patient = session.exec(stmt).scalars().one_or_none()
+    patient = session.exec(stmt).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -162,15 +163,11 @@ def patient_screenings(
     session: Session = Depends(get_session),
 ) -> ScreeningListResponse:
     cutoff = date.today() - timedelta(days=months * 31)
-    screenings = (
-        session.exec(
-            select(HealthScreening)
-            .where(HealthScreening.patient_id == patient_id)
-            .where(HealthScreening.collected_on >= cutoff)
-            .order_by(HealthScreening.collected_on.desc())
-            .limit(limit)
-        )
-        .scalars()
-        .all()
-    )
+    screenings = session.exec(
+        select(HealthScreening)
+        .where(HealthScreening.patient_id == patient_id)
+        .where(HealthScreening.collected_on >= cutoff)
+        .order_by(HealthScreening.collected_on.desc())
+        .limit(limit)
+    ).all()
     return ScreeningListResponse(items=screenings)

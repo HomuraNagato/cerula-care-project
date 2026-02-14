@@ -59,6 +59,26 @@ const PatientDetailPage = () => {
     [screenings],
   );
 
+  const handleExportCsv = () => {
+    if (!sortedScreenings.length || !detail) return;
+    const header = ['Date', 'Score', 'Note'];
+    const rows = sortedScreenings.map((screening) => [
+      screening.collected_on,
+      screening.score.toString(),
+      screening.note ?? '',
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${detail.first_name}-${detail.last_name}-screenings.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const assignments = detail?.assignments ?? [];
   const members = careTeamQuery.data ?? [];
   const assignedIds = useMemo(() => new Set(assignments.map((assignment) => assignment.member_id)), [assignments]);
@@ -356,15 +376,26 @@ const PatientDetailPage = () => {
       </div>
 
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-semibold">Screening history</h2>
-          <span className="text-xs uppercase tracking-wide text-slate-400">
-            {sortedScreenings.length} entries
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs uppercase tracking-wide text-slate-400">
+              {sortedScreenings.length} entries
+            </span>
+            <button
+              className="rounded-md border border-slate-800 px-3 py-1 text-xs text-slate-300 disabled:opacity-40"
+              onClick={handleExportCsv}
+              disabled={!sortedScreenings.length}
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
         {screeningsQuery.isLoading && <p className="mt-3 text-sm text-slate-400">Loading history…</p>}
         {!screeningsQuery.isLoading && sortedScreenings.length === 0 && (
-          <p className="mt-3 text-sm text-slate-400">No screenings available.</p>
+          <p className="mt-3 text-sm text-slate-400">
+            No screenings available. Seed data includes 6 months of screenings for demo patients.
+          </p>
         )}
         {sortedScreenings.length > 0 && (
           <div className="mt-4 overflow-hidden rounded-lg border border-slate-800">

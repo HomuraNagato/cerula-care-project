@@ -69,9 +69,9 @@ def list_assignments(patient_id: UUID, session: Session = Depends(get_session)) 
     if not session.get(Patient, patient_id):
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    assignments = (
-        session.exec(select(CareAssignment).where(CareAssignment.patient_id == patient_id)).scalars().all()
-    )
+    assignments = session.exec(
+        select(CareAssignment).where(CareAssignment.patient_id == patient_id)
+    ).all()
     return [
         AssignmentResponse(
             patient_id=assignment.patient_id,

@@ -1,11 +1,16 @@
+
 from typing import Dict
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import create_engine
+from datetime import date, timedelta
+from uuid import UUID
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, create_engine
 
 from src.core.db import create_db_and_tables, override_engine
 from src.main import app
+from src.models import HealthScreening
 
 
 def build_patient_payload(name: str) -> Dict[str, str]:
@@ -20,7 +25,11 @@ def build_patient_payload(name: str) -> Dict[str, str]:
 
 @pytest.fixture(scope="module")
 def client():
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     override_engine(engine)
     create_db_and_tables()
     with TestClient(app) as test_client:
@@ -35,21 +44,38 @@ def test_health_check(client: TestClient):
 
 def test_patient_can_be_created_and_listed(client: TestClient):
     payload = build_patient_payload("Marisol Vega")
-    response = client.post("/api/patients", json=payload)
+    response = client.post("/patients", json=payload)
     assert response.status_code == 201
     data = response.json()
     assert data["first_name"] == "Marisol"
     assert data["last_name"] == "Vega"
-    list_response = client.get("/api/patients")
+    list_response = client.get("/patients")
     assert list_response.status_code == 200
     assert list_response.json()["total"] == 1
 
 
 def test_patient_detail_includes_screenings(client: TestClient):
     payload = build_patient_payload("Jonas Pierce")
-    create_response = client.post("/api/patients", json=payload).json()
+    create_response = client.post("/patients", json=payload).json()
     patient_id = create_response["id"]
-    detail_response = client.get(f"/api/patients/{patient_id}")
+    # Insert a screening directly for test coverage.
+    from src.core.db import get_engine
+
+    with Session(get_engine()) as session:
+        session.add(
+            HealthScreening(
+                patient_id=UUID(patient_id),
+                score=4,
+                collected_on=date.today() - timedelta(days=30),
+                note="Monthly screening",
+            )
+        )
+        session.commit()
+    detail_response = client.get(f"/patients/{patient_id}")
     assert detail_response.status_code == 200
     detail = detail_response.json()
     assert detail["email"] is None
+
+    screenings_response = client.get(f"/patients/{patient_id}/screenings")
+    assert screenings_response.status_code == 200
+    assert len(screenings_response.json()["items"]) >= 1
