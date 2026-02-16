@@ -50,6 +50,14 @@ This project is a lightweight care management dashboard for Care Admins to manag
   - Frontend: `ui/entrypoint.sh` (npm install + Vite dev server)
 - If the patient list is empty, re-run `python data/seed.py` in the backend container and refresh the UI.
 
+## Design Decisions & Tradeoffs
+- SQLModel + SQLite (`dev.db`) keeps local setup zero-config and fast to iterate, at the cost of production-grade concurrency and migrations.
+- The patient list endpoint computes "latest screening" and active assignments with separate queries and in-memory aggregation for clarity and fewer complex joins, at the cost of extra queries as data scales.
+- React Query + Axios provide caching and request deduplication; mutations invalidate list/detail queries instead of doing optimistic updates for simplicity.
+- Vite dev proxy (`/api`) keeps frontend/backend integration simple in dev, but direct backend URLs require CORS to be enabled.
+- Tailwind utility classes enable rapid UI iteration with consistent styling, at the cost of more verbose JSX.
+- Recharts provides quick trend visualizations for screenings, with limited deep customization compared to lower-level charting libraries.
+
 ## Scripts
 - Backend seed: `python dev/data/seed.py`
 - Backend tests: `pytest dev/tests`
